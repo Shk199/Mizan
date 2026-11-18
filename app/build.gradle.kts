@@ -117,24 +117,58 @@ dependencies {
   "ksp"(libs.moshi.kotlin.codegen)
 }
 
-tasks.register("copyReleaseOutputs") {
-  notCompatibleWithConfigurationCache("Copies release artifacts to Release directory")
-  doLast {
-    val bundleFile = file("build/outputs/bundle/release/app-release.aab")
-    val apkFile = file("build/outputs/apk/release/app-release.apk")
-    val releaseDir = file("${rootDir}/Release")
-    releaseDir.mkdirs()
+abstract class CopyReleaseOutputsTask : DefaultTask() {
+  @get:Input abstract val versionNameProp: Property<String>
+  @get:Input abstract val versionCodeProp: Property<Int>
+  @get:Internal abstract val bundleFileProp: RegularFileProperty
+  @get:Internal abstract val apkFileProp: RegularFileProperty
+  @get:Internal abstract val keystoreFileProp: RegularFileProperty
+  @get:Internal abstract val releaseDirProp: DirectoryProperty
 
+  @TaskAction
+  fun copyOutputs() {
+    val vName = versionNameProp.get()
+    val vCode = versionCodeProp.get()
+    val releaseDir = releaseDirProp.get().asFile
+    val versionDir = releaseDir.resolve("versions/v$vName-code$vCode")
+    releaseDir.mkdirs()
+    versionDir.mkdirs()
+
+    val bundleFile = bundleFileProp.get().asFile
     if (bundleFile.exists()) {
-      bundleFile.copyTo(file("${rootDir}/Release/Release.abb"), overwrite = true)
+      bundleFile.copyTo(releaseDir.resolve("app-release.aab"), overwrite = true)
+      bundleFile.copyTo(versionDir.resolve("Mizan-v$vName-code$vCode.aab"), overwrite = true)
     }
 
+    val apkFile = apkFileProp.get().asFile
     if (apkFile.exists()) {
-      apkFile.copyTo(file("${rootDir}/Release/Release.apk"), overwrite = true)
+      apkFile.copyTo(releaseDir.resolve("app-release.apk"), overwrite = true)
+      apkFile.copyTo(versionDir.resolve("Mizan-v$vName-code$vCode.apk"), overwrite = true)
+    }
+
+    val keystoreFile = keystoreFileProp.get().asFile
+    if (keystoreFile.exists()) {
+      keystoreFile.copyTo(releaseDir.resolve("my-upload-key.jks"), overwrite = true)
+      keystoreFile.copyTo(versionDir.resolve("my-upload-key.jks"), overwrite = true)
     }
   }
 }
 
-tasks.matching { it.name == "signReleaseBundle" || it.name == "bundleRelease" || it.name == "packageRelease" || it.name == "assembleRelease" }.configureEach {
+tasks.register<CopyReleaseOutputsTask>("copyReleaseOutputs") {
+  outputs.upToDateWhen { false }
+  versionNameProp.set(android.defaultConfig.versionName ?: "1.0")
+  versionCodeProp.set(android.defaultConfig.versionCode ?: 1)
+  bundleFileProp.set(layout.buildDirectory.file("outputs/bundle/release/app-release.aab"))
+  apkFileProp.set(layout.buildDirectory.file("outputs/apk/release/app-release.apk"))
+  keystoreFileProp.set(rootProject.layout.projectDirectory.file("my-upload-key.jks"))
+  releaseDirProp.set(rootProject.layout.projectDirectory.dir("Release"))
+}
+
+tasks.matching {
+  it.name == "signReleaseBundle" ||
+    it.name == "bundleRelease" ||
+    it.name == "packageRelease" ||
+    it.name == "assembleRelease"
+}.configureEach {
   finalizedBy("copyReleaseOutputs")
 }
