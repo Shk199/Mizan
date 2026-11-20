@@ -61,7 +61,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -106,27 +105,6 @@ import com.example.ui.theme.Slate600
 import com.example.ui.theme.Slate700
 import com.example.ui.theme.Slate800
 import com.example.ui.theme.TajawalFontFamily
-
-private data class HarakaKey(
-    val label: String,
-    val preview: String,
-    val mark: String,
-    val tag: String
-)
-
-private val HARAKA_ROW_1 = listOf(
-    HarakaKey("فتحة", "ـَ", "\u064E", "haraka_fatha"),
-    HarakaKey("ضمة", "ـُ", "\u064F", "haraka_damma"),
-    HarakaKey("كسرة", "ـِ", "\u0650", "haraka_kasra"),
-    HarakaKey("سكون", "ـْ", "\u0652", "haraka_sukun")
-)
-
-private val HARAKA_ROW_2 = listOf(
-    HarakaKey("شدة", "ـّ", "\u0651", "haraka_shadda"),
-    HarakaKey("تنوين فتح", "ـً", "\u064B", "haraka_tanwin_fath"),
-    HarakaKey("تنوين ضم", "ـٌ", "\u064C", "haraka_tanwin_damm"),
-    HarakaKey("تنوين كسر", "ـٍ", "\u064D", "haraka_tanwin_kasr")
-)
 
 private val MAJRA_OPTIONS = listOf("فتحة", "ضمة", "كسرة", "مقيدة")
 
@@ -205,62 +183,51 @@ fun WritingScreen(
             .fillMaxSize()
             .background(Slate50)
             .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // 1) ملخص أعلى الشاشة
-            WritingSummaryBanner(state = state)
+        // 1) ملخص أعلى الشاشة
+        WritingSummaryBanner(state = state)
 
-            // 2) بطاقة الإعداد القابلة للطي
-            WritingSetupCard(
-                state = state,
-                onSelectMeter = { viewModel.selectMeter(it) },
-                onSelectForm = { viewModel.selectFormType(it) },
-                onToggleNoFixedQafiya = { viewModel.setNoFixedQafiya(it) },
-                onRoiChange = { viewModel.updateRoiInput(it) },
-                onSelectMajra = { viewModel.selectMajraOption(it) },
-                onToggleTasri = { viewModel.setTasriFirstVerse(it) },
-                onStartWriting = { viewModel.startWriting() },
-                onExpandSettings = { viewModel.setSettingsExpanded(true) }
+        // 2) بطاقة الإعداد القابلة للطي
+        WritingSetupCard(
+            state = state,
+            onSelectMeter = { viewModel.selectMeter(it) },
+            onSelectForm = { viewModel.selectFormType(it) },
+            onToggleNoFixedQafiya = { viewModel.setNoFixedQafiya(it) },
+            onRoiChange = { viewModel.updateRoiInput(it) },
+            onSelectMajra = { viewModel.selectMajraOption(it) },
+            onToggleTasri = { viewModel.setTasriFirstVerse(it) },
+            onStartWriting = { viewModel.startWriting() },
+            onExpandSettings = { viewModel.setSettingsExpanded(true) }
+        )
+
+        // 3) محرر الأبيات
+        state.verses.forEachIndexed { index, verse ->
+            WritingVerseCard(
+                index = index,
+                verse = verse,
+                canDelete = state.verses.size > 1 || verse.sadr.text.isNotEmpty() || verse.ajuz.text.isNotEmpty(),
+                onSadrChange = { viewModel.updateSadr(verse.id, it) },
+                onAjuzChange = { viewModel.updateAjuz(verse.id, it) },
+                onDeleteVerse = { viewModel.deleteVerse(verse.id) }
             )
-
-            // 3) محرر الأبيات
-            state.verses.forEachIndexed { index, verse ->
-                WritingVerseCard(
-                    index = index,
-                    verse = verse,
-                    canDelete = state.verses.size > 1 || verse.sadr.text.isNotEmpty() || verse.ajuz.text.isNotEmpty(),
-                    onSadrChange = { viewModel.updateSadr(verse.id, it) },
-                    onAjuzChange = { viewModel.updateAjuz(verse.id, it) },
-                    onFocusField = { isAjuz -> viewModel.setActiveField(verse.id, isAjuz) },
-                    onDeleteVerse = { viewModel.deleteVerse(verse.id) }
-                )
-            }
-
-            // 4) شريط الإجراءات السفلي (داخل التمرير، دون FAB عائم)
-            WritingActionBar(
-                onAddVerse = { viewModel.addVerse() },
-                onCopyPoem = {
-                    val formatted = viewModel.formatPoemForCopy()
-                    copyToClipboard(formatted, "تم نسخ القصيدة ✓")
-                    viewModel.showToast("تم نسخ القصيدة ✓")
-                },
-                onSavePoem = { viewModel.savePoem() },
-                onRequestNewDraft = { showNewDraftConfirm = true }
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
         }
 
-        // 5) شريط الحركات المثبّت فوق لوحة المفاتيح
-        HarakaToolbar(
-            onInsertHaraka = { mark -> viewModel.insertHaraka(mark) }
+        // 4) شريط الإجراءات السفلي (داخل التمرير، دون FAB عائم)
+        WritingActionBar(
+            onAddVerse = { viewModel.addVerse() },
+            onCopyPoem = {
+                val formatted = viewModel.formatPoemForCopy()
+                copyToClipboard(formatted, "تم نسخ القصيدة ✓")
+                viewModel.showToast("تم نسخ القصيدة ✓")
+            },
+            onSavePoem = { viewModel.savePoem() },
+            onRequestNewDraft = { showNewDraftConfirm = true }
         )
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -714,7 +681,6 @@ private fun WritingVerseCard(
     canDelete: Boolean,
     onSadrChange: (TextFieldValue) -> Unit,
     onAjuzChange: (TextFieldValue) -> Unit,
-    onFocusField: (Boolean) -> Unit,
     onDeleteVerse: () -> Unit
 ) {
     Surface(
@@ -769,8 +735,7 @@ private fun WritingVerseCard(
                 eval = verse.eval.sadr,
                 inputTag = "writing_sadr_input_${verse.id}",
                 statusTag = "writing_sadr_status_${verse.id}",
-                onValueChange = onSadrChange,
-                onFocused = { onFocusField(false) }
+                onValueChange = onSadrChange
             )
 
             // العجز
@@ -781,8 +746,7 @@ private fun WritingVerseCard(
                 eval = verse.eval.ajuz,
                 inputTag = "writing_ajuz_input_${verse.id}",
                 statusTag = "writing_ajuz_status_${verse.id}",
-                onValueChange = onAjuzChange,
-                onFocused = { onFocusField(true) }
+                onValueChange = onAjuzChange
             )
 
             // نتيجة القافية للبيت
@@ -905,8 +869,7 @@ private fun WritingShatrBlock(
     eval: ShatrEvaluationUi,
     inputTag: String,
     statusTag: String,
-    onValueChange: (TextFieldValue) -> Unit,
-    onFocused: () -> Unit
+    onValueChange: (TextFieldValue) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -959,7 +922,6 @@ private fun WritingShatrBlock(
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .onFocusChanged { if (it.isFocused) onFocused() }
                 .testTag(inputTag)
         )
 
@@ -1208,82 +1170,6 @@ private fun WritingActionBar(
             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(4.dp))
             Text("مسودة جديدة", fontFamily = TajawalFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-        }
-    }
-}
-
-@Composable
-private fun HarakaToolbar(
-    onInsertHaraka: (String) -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("writing_haraka_toolbar"),
-        color = Color.White,
-        border = BorderStroke(1.dp, Slate200),
-        shadowElevation = 4.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            HarakaButtonRow(items = HARAKA_ROW_1, onInsertHaraka = onInsertHaraka)
-            HarakaButtonRow(items = HARAKA_ROW_2, onInsertHaraka = onInsertHaraka)
-        }
-    }
-}
-
-@Composable
-private fun HarakaButtonRow(
-    items: List<HarakaKey>,
-    onInsertHaraka: (String) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        items.forEach { key ->
-            Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 48.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { onInsertHaraka(key.mark) }
-                    .testTag(key.tag),
-                shape = RoundedCornerShape(10.dp),
-                color = Slate50,
-                border = BorderStroke(1.dp, Slate200)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = key.preview,
-                        fontFamily = AmiriFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = Gold700,
-                        lineHeight = 16.sp
-                    )
-                    Text(
-                        text = key.label,
-                        fontFamily = TajawalFontFamily,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 10.sp,
-                        color = Navy900,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 12.sp
-                    )
-                }
-            }
         }
     }
 }

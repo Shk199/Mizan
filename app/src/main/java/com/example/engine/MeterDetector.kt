@@ -102,6 +102,10 @@ object MeterDetector {
         }
     }
 
+    fun lookupZihafName(baseFoot: String, pattern: String): String? {
+        return ZIHAF_DICT[baseFoot]?.get(pattern)
+    }
+
     private fun getZihafDescription(baseFoot: String, pattern: String, footName: String): String {
         val dictForBase = ZIHAF_DICT[baseFoot]
         if (dictForBase != null && dictForBase.containsKey(pattern)) {
@@ -148,7 +152,8 @@ object MeterDetector {
         val isSound: Boolean,
         val matchedFeet: List<FootMatch>,
         val matchingPairIndices: Set<Int>,
-        val minAllowedLength: Int
+        val minAllowedLength: Int,
+        val matchedFeetByPair: Map<Int, List<FootMatch>> = emptyMap()
     )
 
     fun matchShatrForForm(
@@ -173,6 +178,7 @@ object MeterDetector {
         }
 
         val matchingPairs = mutableSetOf<Int>()
+        val matchedFeetByPair = mutableMapOf<Int, List<FootMatch>>()
         var firstMatchedFeet: List<FootMatch>? = null
 
         for (pIdx in form.pairs.indices) {
@@ -185,6 +191,7 @@ object MeterDetector {
                 val matched = matchShatrDfs(sp, targetOptions, bases)
                 if (matched != null) {
                     matchingPairs.add(pIdx)
+                    matchedFeetByPair[pIdx] = matched
                     if (firstMatchedFeet == null) {
                         firstMatchedFeet = matched
                     }
@@ -197,7 +204,8 @@ object MeterDetector {
             isSound = matchingPairs.isNotEmpty(),
             matchedFeet = firstMatchedFeet ?: emptyList(),
             matchingPairIndices = matchingPairs,
-            minAllowedLength = minAllowedLength
+            minAllowedLength = minAllowedLength,
+            matchedFeetByPair = matchedFeetByPair
         )
     }
 

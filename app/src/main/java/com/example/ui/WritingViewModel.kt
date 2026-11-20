@@ -79,11 +79,6 @@ data class WritingVerseItem(
     val eval: VerseEvaluationUi = VerseEvaluationUi()
 )
 
-data class ActiveFieldTarget(
-    val verseId: Long,
-    val isAjuz: Boolean
-)
-
 data class WritingUiState(
     val meters: List<MeterDefinition> = emptyList(),
     val selectedMeterId: String = "tawil",
@@ -95,7 +90,6 @@ data class WritingUiState(
     val tasriFirstVerse: Boolean = false,
     val isSettingsExpanded: Boolean = true,
     val verses: List<WritingVerseItem> = listOf(WritingVerseItem(id = 1L)),
-    val activeField: ActiveFieldTarget? = ActiveFieldTarget(1L, false),
     val draftLoaded: Boolean = false
 ) {
     val selectedMeter: MeterDefinition?
@@ -166,7 +160,6 @@ class WritingViewModel(
                     tasriFirstVerse = draft.tasriFirstVerse,
                     isSettingsExpanded = draft.isSettingsExpanded,
                     verses = loadedVerses,
-                    activeField = ActiveFieldTarget(loadedVerses.first().id, false),
                     draftLoaded = true
                 )
                 evaluateAllNow()
@@ -253,18 +246,11 @@ class WritingViewModel(
         persistDraft()
     }
 
-    fun setActiveField(verseId: Long, isAjuz: Boolean) {
-        _uiState.value = _uiState.value.copy(activeField = ActiveFieldTarget(verseId, isAjuz))
-    }
-
     fun updateSadr(verseId: Long, newValue: TextFieldValue) {
         val updated = _uiState.value.verses.map { item ->
             if (item.id == verseId) item.copy(sadr = newValue) else item
         }
-        _uiState.value = _uiState.value.copy(
-            verses = updated,
-            activeField = ActiveFieldTarget(verseId, false)
-        )
+        _uiState.value = _uiState.value.copy(verses = updated)
         scheduleDebouncedEvaluation()
         persistDraft()
     }
@@ -273,47 +259,16 @@ class WritingViewModel(
         val updated = _uiState.value.verses.map { item ->
             if (item.id == verseId) item.copy(ajuz = newValue) else item
         }
-        _uiState.value = _uiState.value.copy(
-            verses = updated,
-            activeField = ActiveFieldTarget(verseId, true)
-        )
+        _uiState.value = _uiState.value.copy(verses = updated)
         scheduleDebouncedEvaluation()
         persistDraft()
-    }
-
-    fun insertHaraka(mark: String) {
-        val state = _uiState.value
-        val target = state.activeField ?: state.verses.firstOrNull()?.let { ActiveFieldTarget(it.id, false) } ?: return
-        val verse = state.verses.find { it.id == target.verseId } ?: return
-        val currentField = if (target.isAjuz) verse.ajuz else verse.sadr
-
-        val start = minOf(currentField.selection.start, currentField.selection.end).coerceIn(0, currentField.text.length)
-        val end = maxOf(currentField.selection.start, currentField.selection.end).coerceIn(0, currentField.text.length)
-
-        val newText = buildString {
-            append(currentField.text.substring(0, start))
-            append(mark)
-            append(currentField.text.substring(end))
-        }
-        val newCursor = start + mark.length
-        val updatedValue = TextFieldValue(
-            text = newText,
-            selection = TextRange(newCursor)
-        )
-
-        if (target.isAjuz) {
-            updateAjuz(verse.id, updatedValue)
-        } else {
-            updateSadr(verse.id, updatedValue)
-        }
     }
 
     fun addVerse() {
         val newId = nextVerseId++
         val newVerse = WritingVerseItem(id = newId)
         _uiState.value = _uiState.value.copy(
-            verses = _uiState.value.verses + newVerse,
-            activeField = ActiveFieldTarget(newId, false)
+            verses = _uiState.value.verses + newVerse
         )
         persistDraft()
     }
@@ -325,14 +280,8 @@ class WritingViewModel(
         } else {
             current.filterNot { it.id == verseId }
         }
-        val active = _uiState.value.activeField?.takeIf { target ->
-            remaining.any { it.id == target.verseId }
-        } ?: ActiveFieldTarget(remaining.first().id, false)
 
-        _uiState.value = _uiState.value.copy(
-            verses = remaining,
-            activeField = active
-        )
+        _uiState.value = _uiState.value.copy(verses = remaining)
         evaluateAllNow()
         persistDraft()
     }
@@ -350,8 +299,7 @@ class WritingViewModel(
             majraOption = "ضمة",
             tasriFirstVerse = false,
             isSettingsExpanded = true,
-            verses = listOf(WritingVerseItem(id = freshId)),
-            activeField = ActiveFieldTarget(freshId, false)
+            verses = listOf(WritingVerseItem(id = freshId))
         )
         viewModelScope.launch {
             WritingDraftStore.clearDraft(getApplication())

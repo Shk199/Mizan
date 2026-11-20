@@ -200,7 +200,8 @@ object MeterCorrector {
         shatrAnalysis: ShatrAnalysis,
         rawShatrText: String,
         form: MeterForm,
-        isAjuz: Boolean
+        isAjuz: Boolean,
+        allowedPairIndices: Set<Int>? = null
     ): FormPatternCorrection {
         data class PatternCand(
             val fullPattern: String,
@@ -214,7 +215,12 @@ object MeterCorrector {
                 parts.getOrElse(0) { "" } to parts.getOrElse(1) { "" }
             }
         }
-        val endItems = form.pairs.map { pair ->
+        val filteredPairs = if (allowedPairIndices != null && allowedPairIndices.isNotEmpty()) {
+            form.pairs.filterIndexed { idx, _ -> idx in allowedPairIndices }
+        } else {
+            form.pairs
+        }
+        val endItems = filteredPairs.map { pair ->
             val raw = if (isAjuz) pair.getOrElse(1) { "" } else pair.getOrElse(0) { "" }
             val parts = raw.split(":")
             parts.getOrElse(0) { "" } to parts.getOrElse(1) { "" }

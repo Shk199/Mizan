@@ -1,12 +1,20 @@
 package com.example
 
 import android.app.Application
-import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.WritingDraftStore
 import com.example.ui.ShatrWeightStatus
 import com.example.ui.WritingViewModel
+import com.example.ui.screens.WritingScreen
+import com.example.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -21,6 +29,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -30,6 +39,9 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class WritingModeTest {
+
+    @get:Rule
+    val composeRule = createComposeRule()
 
     private lateinit var app: Application
     private val testDispatcher = UnconfinedTestDispatcher()
@@ -216,7 +228,7 @@ class WritingModeTest {
     }
 
     @Test
-    fun `unvocalized_shatr_prompts_diacritics_and_haraka_inserts_at_cursor`() {
+    fun `unvocalized_shatr_prompts_diacritics`() {
         val vm = createViewModel()
         val verseId = vm.uiState.value.verses.first().id
         vm.updateSadr(verseId, TextFieldValue("على قدر أهل العزم"))
@@ -225,12 +237,55 @@ class WritingModeTest {
         val sadr = vm.uiState.value.verses.first().eval.sadr
         assertEquals(ShatrWeightStatus.NEEDS_DIACRITICS, sadr.status)
         assertEquals("شكّل الشطر لتظهر النتيجة", sadr.message)
-
-        // التحقق من إدخال الحركة عند موضع المؤشر
-        vm.updateSadr(verseId, TextFieldValue("كتب", TextRange(1)))
-        vm.insertHaraka("\u064E") // فتحة بعد الحرف الأول
-        assertEquals("كَتب", vm.uiState.value.verses.first().sadr.text)
-        assertEquals(TextRange(2), vm.uiState.value.verses.first().sadr.selection)
         assertNotNull(vm.formatPoemForCopy())
+    }
+
+    @Test
+    fun `writing_screen_hides_haraka_toolbar_and_evaluates_mutanabbi_from_keyboard_input`() {
+        val vm = createViewModel()
+        vm.selectMeter("tawil")
+        vm.selectFormType("تام")
+        vm.startWriting()
+
+        composeRule.setContent {
+            MyApplicationTheme {
+                WritingScreen(
+                    viewModel = vm,
+                    onShowToast = {}
+                )
+            }
+        }
+
+        val removedTags = listOf(
+            "writing_haraka_toolbar",
+            "haraka_fatha",
+            "haraka_damma",
+            "haraka_kasra",
+            "haraka_sukun",
+            "haraka_shadda",
+            "haraka_tanwin_fath",
+            "haraka_tanwin_damm",
+            "haraka_tanwin_kasr"
+        )
+        removedTags.forEach { tag ->
+            assertEquals(0, composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().size)
+        }
+
+        val verseId = vm.uiState.value.verses.first().id
+        composeRule.onNodeWithTag("writing_sadr_input_$verseId")
+            .performScrollTo()
+            .performTextInput("عَلَى قَدْرِ أَهْلِ الْعَزْمِ تَأْتِي الْعَزَائِمُ")
+        composeRule.onNodeWithTag("writing_ajuz_input_$verseId")
+            .performScrollTo()
+            .performTextInput("وَتَأْتِي عَلَى قَدْرِ الْكِرَامِ الْمَكَارِمُ")
+
+        vm.evaluateAllNow()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("writing_qafiya_box_$verseId")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("الوزن ✓").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("القافية ✓").performScrollTo().assertIsDisplayed()
     }
 }
